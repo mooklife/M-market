@@ -1,7 +1,21 @@
-# CLAUDE.md — my-trading-agent 개발 정책
+# CLAUDE.md — M-Market 개발 정책
 
 > **모든 노트북 / 모든 AI 모델(Claude, GPT-4o 등)에서 공통 적용**
 > VS Code Copilot이 이 파일을 자동으로 읽어 지시에 따릅니다.
+
+> **프로젝트 설계 문서**: [`PROJECT.md`](PROJECT.md) — DB 스키마, 디렉토리 구조, 크롤러 인터페이스, API 엔드포인트 정의.
+> 구조·스키마·인터페이스 변경 시 PROJECT.md도 반드시 함께 업데이트한다.
+
+---
+
+## 0. 이 프로젝트 전용 규칙 (M-Market)
+
+- **DB 접근**: 항상 `db/repository.py`를 통해서만 접근. 직접 SQL 작성은 `repository.py` 내부에만 허용.
+- **크롤러 반환 형식**: `PROJECT.md 섹션 5-2`의 dict 형식을 반드시 준수.
+- **카테고리 추가**: `categories` 테이블 레코드 추가 + 각 크롤러의 `category_url` dict 에 URL 추가.
+- **신규 마켓 추가**: `config/markets.json` 등록 + `crawler/{key}.py` 파일 1개 추가.
+- **KST 시각**: `utils/datetime_utils.py`의 `get_kst_now()` / `get_kst_now_str()` 사용.
+- **설정값 소스**: `PROJECT.md 섹션 7` 참조.
 
 ---
 

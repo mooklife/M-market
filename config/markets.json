@@ -1,0 +1,37 @@
+[
+    {
+        "name": "마켓컬리",
+        "url": "https://www.kurly.com",
+        "crawler_key": "kurly",
+        "is_active": true,
+        "login_required": false
+    },
+    {
+        "name": "쿠팡",
+        "url": "https://www.coupang.com",
+        "crawler_key": "coupang",
+        "is_active": true,
+        "login_required": false
+    },
+    {
+        "name": "이마트몰",
+        "url": "https://emart.ssg.com",
+        "crawler_key": "emart",
+        "is_active": true,
+        "login_required": false
+    },
+    {
+        "name": "롯데마트몰",
+        "url": "https://www.lotteon.com/p/display/shop/seltDpShop/12067",
+        "crawler_key": "lotte",
+        "is_active": true,
+        "login_required": false
+    },
+    {
+        "name": "오아시스마켓",
+        "url": "https://www.oasis.co.kr",
+        "crawler_key": "oasis",
+        "is_active": true,
+        "login_required": false
+    }
+]

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}관리 — M-Market{% endblock %}
+
+{% block content %}
+<h1 class="page-title">⚙️ 관리</h1>
+
+<!-- 크롤링 실행 -->
+<div class="card" style="margin-bottom:24px;">
+    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">수동 크롤링</h2>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <select id="crawl-category">
+            {% for cat in categories %}
+            <option value="{{ cat.key }}">{{ cat.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-primary" onclick="runCrawl()">🔄 지금 크롤링</button>
+        <button class="btn btn-outline" onclick="checkStatus()">상태 확인</button>
+    </div>
+    <div id="crawl-result" style="margin-top:12px; font-size:0.875rem; color:var(--text-muted);"></div>
+</div>
+
+<!-- 마켓 목록 -->
+<div class="card">
+    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">등록 마켓</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>마켓명</th>
+                <th>URL</th>
+                <th>크롤러 키</th>
+                <th>로그인 필요</th>
+                <th>상태</th>
+                <th>변경</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for market in markets %}
+        <tr>
+            <td><strong>{{ market.name }}</strong></td>
+            <td>
+                <a href="{{ market.url }}" target="_blank"
+                   style="color:var(--primary); font-size:0.8rem; word-break:break-all;">
+                    {{ market.url }}
+                </a>
+            </td>
+            <td><code style="font-size:0.8rem; background:var(--bg); padding:2px 6px; border-radius:4px;">{{ market.crawler_key }}</code></td>
+            <td>{% if market.login_required %}<span class="badge badge-red">필요</span>{% else %}<span class="badge badge-green">불필요</span>{% endif %}</td>
+            <td>
+                {% if market.is_active %}
+                <span class="badge badge-green">활성</span>
+                {% else %}
+                <span class="badge badge-red" style="background:#fef2f2;">비활성</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if market.is_active %}
+                <button class="btn btn-outline" style="font-size:0.75rem; padding:5px 10px;"
+                        onclick="toggleMarket('{{ market.crawler_key }}', false)">비활성화</button>
+                {% else %}
+                <button class="btn btn-primary" style="font-size:0.75rem; padding:5px 10px;"
+                        onclick="toggleMarket('{{ market.crawler_key }}', true)">활성화</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+async function runCrawl() {
+    const cat = document.getElementById('crawl-category').value;
+    const res = await fetch(`/api/crawl?category=${cat}`, { method: 'POST' });
+    const data = await res.json();
+    document.getElementById('crawl-result').textContent = data.message;
+}
+
+async function checkStatus() {
+    const res = await fetch('/api/crawl/status');
+    const data = await res.json();
+    const el = document.getElementById('crawl-result');
+    if (data.running) {
+        el.textContent = '⏳ 크롤링 진행 중...';
+    } else if (data.last_result) {
+        const summary = Object.entries(data.last_result)
+            .map(([k, v]) => `${k}: ${v}건`).join(', ');
+        el.textContent = `✅ 마지막 결과 — ${summary}`;
+    } else {
+        el.textContent = '대기 중';
+    }
+}
+
+async function toggleMarket(key, active) {
+    await fetch(`/api/markets/${key}/toggle?active=${active}`, { method: 'POST' });
+    location.reload();
+}
+</script>
+{% endblock %}
