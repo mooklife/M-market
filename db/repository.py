@@ -119,20 +119,54 @@ def delete_search_item(item_id: int) -> None:
         conn.execute("DELETE FROM search_items WHERE id=?", (item_id,))
 
 
+# ── 대표 상품 ─────────────────────────────────────────────────────────────────
+
+def upsert_standard_product(search_item_id: int, category_id: int,
+                             product_type: str, product_state: str) -> int:
+    """(search_item_id, product_type, product_state) 조합으로 대표 상품을 생성/조회."""
+    display_name = f"{product_state} {product_type}" if product_state != "일반" else product_type
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO standard_products
+                   (category_id, search_item_id, product_type, product_state, display_name)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(search_item_id, product_type, product_state) DO UPDATE SET
+                   display_name=excluded.display_name""",
+            (category_id, search_item_id, product_type, product_state, display_name),
+        )
+        row = conn.execute(
+            """SELECT id FROM standard_products
+               WHERE search_item_id=? AND product_type=? AND product_state=?""",
+            (search_item_id, product_type, product_state),
+        ).fetchone()
+    return row["id"]
+
+
 # ── 상품 ──────────────────────────────────────────────────────────────────────
 
 def upsert_product(market_id: int, category_id: int, search_item_id: int,
-                   name: str, unit: Optional[str], product_url: Optional[str]) -> int:
+                   name: str, unit: Optional[str], product_url: Optional[str],
+                   weight_g: Optional[int] = None, unit_price: Optional[float] = None,
+                   product_type: Optional[str] = None, product_state: Optional[str] = None,
+                   standard_id: Optional[int] = None, image_url: Optional[str] = None) -> int:
     now = get_kst_now_str()
     with get_db() as conn:
         conn.execute(
             """INSERT INTO products
-                   (market_id, category_id, search_item_id, name, unit, product_url, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+                   (market_id, category_id, search_item_id, name, unit, product_url, created_at,
+                    weight_g, unit_price, product_type, product_state, standard_id, image_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(market_id, search_item_id, name, unit) DO UPDATE SET
                    product_url=excluded.product_url,
-                   search_item_id=excluded.search_item_id""",
-            (market_id, category_id, search_item_id, name, unit, product_url, now),
+                   search_item_id=excluded.search_item_id,
+                   weight_g=excluded.weight_g,
+                   unit_price=excluded.unit_price,
+                   product_type=excluded.product_type,
+                   product_state=excluded.product_state,
+                   standard_id=excluded.standard_id,
+                   image_url=excluded.image_url""",
+            (market_id, category_id, search_item_id, name, unit, product_url, now,
+             weight_g, unit_price, product_type, product_state, standard_id, image_url),
         )
         row = conn.execute(
             """SELECT id FROM products
@@ -158,6 +192,8 @@ def get_items_with_latest_prices(category_key: str) -> list[dict]:
         for item in items:
             market_rows = conn.execute(
                 """SELECT p.id AS product_id, p.name AS product_name, p.unit, p.product_url,
+                          p.weight_g, p.unit_price, p.product_type, p.product_state, p.standard_id,
+                          p.image_url,
                           m.name AS market_name, m.crawler_key,
                           ph.sale_price, ph.original_price, ph.discount_rate, ph.collected_at
                    FROM products p

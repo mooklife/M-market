@@ -3,10 +3,23 @@
 TBL_CATEGORIES = "categories"
 TBL_MARKETS = "markets"
 TBL_SEARCH_ITEMS = "search_items"
+TBL_STANDARD_PRODUCTS = "standard_products"
 TBL_PRODUCTS = "products"
 TBL_PRICE_HISTORY = "price_history"
 
 DDL_CREATE_TABLES = """
+CREATE TABLE IF NOT EXISTS standard_products (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id    INTEGER NOT NULL,
+    search_item_id INTEGER NOT NULL,
+    product_type   TEXT NOT NULL,   -- 흙양파/깐양파/일반 등 (유형)
+    product_state  TEXT NOT NULL,   -- 일반/친환경 (상태)
+    display_name   TEXT NOT NULL,   -- "일반 흙양파" 형태 표시명
+    FOREIGN KEY (category_id)    REFERENCES categories(id),
+    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    UNIQUE (search_item_id, product_type, product_state)
+);
+
 CREATE TABLE IF NOT EXISTS categories (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     key             TEXT UNIQUE NOT NULL,
@@ -43,9 +56,16 @@ CREATE TABLE IF NOT EXISTS products (
     unit           TEXT,
     product_url    TEXT,
     created_at     TEXT NOT NULL,
-    FOREIGN KEY (market_id)      REFERENCES markets(id),
-    FOREIGN KEY (category_id)    REFERENCES categories(id),
-    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    weight_g       INTEGER,         -- 파싱된 총 중량(g), NULL이면 단위비교 불가
+    unit_price     REAL,            -- 100g당 가격
+    product_type   TEXT,            -- 유형 (흙양파/깐양파 등)
+    product_state  TEXT,            -- 상태 (일반/친환경)
+    standard_id    INTEGER,         -- standard_products.id
+    image_url      TEXT,            -- 상품 썸네일 이미지 URL
+    FOREIGN KEY (market_id)         REFERENCES markets(id),
+    FOREIGN KEY (category_id)       REFERENCES categories(id),
+    FOREIGN KEY (search_item_id)    REFERENCES search_items(id),
+    FOREIGN KEY (standard_id)       REFERENCES standard_products(id),
     UNIQUE (market_id, search_item_id, name, unit)
 );
 

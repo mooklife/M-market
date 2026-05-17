@@ -21,8 +21,8 @@
         "login_required": false
     },
     {
-        "name": "롯데마트몰",
-        "url": "https://www.lotteon.com/p/display/shop/seltDpShop/12067",
+        "name": "롯데마트",
+        "url": "https://lottemartzetta.com",
         "crawler_key": "lotte",
         "is_active": true,
         "login_required": false
@@ -31,6 +31,13 @@
         "name": "오아시스마켓",
         "url": "https://www.oasis.co.kr",
         "crawler_key": "oasis",
+        "is_active": true,
+        "login_required": false
+    },
+    {
+        "name": "홈플러스",
+        "url": "https://front.homeplus.co.kr",
+        "crawler_key": "homeplus",
         "is_active": true,
         "login_required": false
     }

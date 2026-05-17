@@ -77,6 +77,27 @@ M-market/
 
 ## 4. DB 스키마
 
+### 4-0. standard_products (대표 상품 — 단위가격 비교 기준)
+
+크롤링된 상품을 `(search_item_id, product_type, product_state)` 조합으로 그룹화한 대표 상품.
+마켓별 단위가격(100g당) 비교의 기준 단위가 된다.
+
+```sql
+CREATE TABLE standard_products (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id    INTEGER NOT NULL,
+    search_item_id INTEGER NOT NULL,
+    product_type   TEXT NOT NULL,   -- 유형: 흙양파/깐양파/자색양파/미니양파 등
+    product_state  TEXT NOT NULL,   -- 상태: 일반/친환경
+    display_name   TEXT NOT NULL,   -- 표시명: "흙양파" / "친환경 깐양파"
+    FOREIGN KEY (category_id)    REFERENCES categories(id),
+    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    UNIQUE (search_item_id, product_type, product_state)
+);
+```
+
+**유형/상태 룰북**: `config/product_rules.json` — 키워드 기반 자동 태깅.
+
 ### 4-1. categories (카테고리)
 
 ```sql
@@ -132,9 +153,15 @@ CREATE TABLE products (
     unit           TEXT,                 -- '1단', '1kg', '500g'
     product_url    TEXT,
     created_at     TEXT NOT NULL,
-    FOREIGN KEY (market_id)      REFERENCES markets(id),
-    FOREIGN KEY (category_id)    REFERENCES categories(id),
-    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    weight_g       INTEGER,              -- 파싱된 총 중량(g), NULL이면 단위비교 불가
+    unit_price     REAL,                 -- 100g당 가격
+    product_type   TEXT,                 -- 유형 (흙양파/깐양파 등)
+    product_state  TEXT,                 -- 상태 (일반/친환경)
+    standard_id    INTEGER,              -- standard_products.id
+    FOREIGN KEY (market_id)         REFERENCES markets(id),
+    FOREIGN KEY (category_id)       REFERENCES categories(id),
+    FOREIGN KEY (search_item_id)    REFERENCES search_items(id),
+    FOREIGN KEY (standard_id)       REFERENCES standard_products(id),
     UNIQUE (market_id, search_item_id, name, unit)
 );
 ```

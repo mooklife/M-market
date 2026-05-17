@@ -46,6 +46,39 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE products ADD COLUMN search_item_id INTEGER REFERENCES search_items(id)")
         logger.info("products.search_item_id 컬럼 추가")
 
+    # standard_products 테이블 (단위가격 비교 Phase)
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "standard_products" not in tables:
+        conn.execute("""
+            CREATE TABLE standard_products (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id    INTEGER NOT NULL,
+                search_item_id INTEGER NOT NULL,
+                product_type   TEXT NOT NULL,
+                product_state  TEXT NOT NULL,
+                display_name   TEXT NOT NULL,
+                FOREIGN KEY (category_id)    REFERENCES categories(id),
+                FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+                UNIQUE (search_item_id, product_type, product_state)
+            )
+        """)
+        logger.info("standard_products 테이블 생성")
+
+    # products — 단위가격/유형/대표상품 컬럼
+    prod_cols = {row[1] for row in conn.execute("PRAGMA table_info(products)").fetchall()}
+    new_cols = {
+        "weight_g":      "INTEGER",
+        "unit_price":    "REAL",
+        "product_type":  "TEXT",
+        "product_state": "TEXT",
+        "standard_id":   "INTEGER",
+        "image_url":     "TEXT",
+    }
+    for col, col_type in new_cols.items():
+        if col not in prod_cols:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {col} {col_type}")
+            logger.info(f"products.{col} 컬럼 추가")
+
 
 def _seed_search_items(conn: sqlite3.Connection) -> None:
     """config/items.json 에서 search_items 시드 데이터 삽입 (멱등)"""

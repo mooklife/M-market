@@ -8,6 +8,7 @@ from typing import Optional
 from config.settings import BASE_DIR
 from db import repository as repo
 from utils.logger import setup_custom_logger
+from utils.product_parser import calc_unit_price, parse_weight_g, tag_product
 
 logger = setup_custom_logger("CrawlerRunner", log_prefix="crawler")
 
@@ -86,6 +87,20 @@ async def run_market(crawler_key: str, keyword: str, search_item_id: int,
     saved = 0
     for item in products:
         try:
+            # 중량 파싱 + 단위가격 계산
+            combined = f"{item['name']} {item.get('unit') or ''}"
+            weight_g = parse_weight_g(combined)
+            unit_price = calc_unit_price(int(item["sale_price"]), weight_g) if weight_g else None
+
+            # 유형/상태 태깅 + 대표 상품 매핑
+            product_type, product_state = tag_product(keyword, item["name"])
+            standard_id = repo.upsert_standard_product(
+                search_item_id=search_item_id,
+                category_id=category_id,
+                product_type=product_type,
+                product_state=product_state,
+            )
+
             product_id = repo.upsert_product(
                 market_id=market_id,
                 category_id=category_id,
@@ -93,6 +108,12 @@ async def run_market(crawler_key: str, keyword: str, search_item_id: int,
                 name=item["name"],
                 unit=item.get("unit"),
                 product_url=item.get("product_url"),
+                weight_g=weight_g,
+                unit_price=unit_price,
+                product_type=product_type,
+                product_state=product_state,
+                standard_id=standard_id,
+                image_url=item.get("image_url"),
             )
             repo.insert_price(
                 product_id=product_id,

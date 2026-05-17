@@ -77,6 +77,27 @@ class BaseCrawler(ABC):
             }
         """
 
+    @staticmethod
+    async def _get_image_url(item, base_url: str = "") -> Optional[str]:
+        """상품 카드에서 썸네일 이미지 URL 추출. lazy-load 속성도 확인."""
+        img_el = await item.query_selector("img")
+        if img_el is None:
+            return None
+        src = await img_el.get_attribute("src")
+        if not src or src.startswith("data:") or "placeholder" in (src or "").lower():
+            src = (
+                await img_el.get_attribute("data-src")
+                or await img_el.get_attribute("data-lazy-src")
+                or await img_el.get_attribute("data-original")
+            )
+        if not src or src.startswith("data:"):
+            return None
+        if src.startswith("//"):
+            return "https:" + src
+        if src.startswith("/"):
+            return base_url.rstrip("/") + src
+        return src
+
     def _requires_login(self) -> bool:
         login_id = os.getenv(f"{self.market_key.upper()}_ID")
         return login_id is not None and login_id != ""

@@ -69,10 +69,13 @@ class CoupangCrawler(BaseCrawler):
 
         name, unit = _split_name_unit(name_text)
 
+        image_url = await self._get_image_url(item, "https://www.coupang.com")
+
         return {
             "name": name,
             "unit": unit,
             "product_url": product_url,
+            "image_url": image_url,
             "original_price": original_price,
             "discount_rate": discount_rate,
             "sale_price": sale_price,

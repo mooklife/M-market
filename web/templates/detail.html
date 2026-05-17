@@ -21,9 +21,20 @@
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:10px;">
     {% for m in item_data.markets %}
     <div style="border:1px solid var(--border); border-radius:8px; padding:12px;">
+        {% if m.image_url %}
+        <a href="{{ m.product_url or '#' }}" target="_blank" rel="noopener">
+            <img src="{{ m.image_url }}" alt="{{ m.product_name }}"
+                 style="width:100%; height:100px; object-fit:contain; border-radius:4px; margin-bottom:8px; background:#f8f8f8;"
+                 onerror="this.style.display='none'">
+        </a>
+        {% endif %}
         <div style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">{{ m.market_name }}</div>
+        <div style="font-size:0.8rem; margin-top:2px; color:var(--text); line-height:1.3;">{{ m.product_name }}</div>
         {% if m.sale_price %}
         <div class="price" style="font-size:1.05rem; margin-top:4px;">{{ "{:,}".format(m.sale_price) }}원</div>
+        {% if m.unit_price %}
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">100g당 {{ "{:,.0f}".format(m.unit_price) }}원</div>
+        {% endif %}
         {% if m.discount_rate and m.discount_rate > 0 %}
         <span class="badge badge-red">{{ (m.discount_rate * 100) | int }}%↓</span>
         {% endif %}

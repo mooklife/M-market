@@ -69,10 +69,13 @@ class KurlyCrawler(BaseCrawler):
         # 단위 — 상품명에서 추출 시도 (예: "대파 1단", "양파 1kg")
         name, unit = _split_name_unit(name_text)
 
+        image_url = await self._get_image_url(item, "https://www.kurly.com")
+
         return {
             "name": name,
             "unit": unit,
             "product_url": product_url,
+            "image_url": image_url,
             "original_price": original_price,
             "discount_rate": discount_rate,
             "sale_price": sale_price,
