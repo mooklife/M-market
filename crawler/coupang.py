@@ -8,11 +8,7 @@ from crawler.base import BaseCrawler
 
 class CoupangCrawler(BaseCrawler):
     market_key = "coupang"
-    category_url = {
-        "vegetable": "https://www.coupang.com/np/categories/449952",  # 채소
-        "fruit":     "https://www.coupang.com/np/categories/449951",  # 과일
-        "grocery":   "https://www.coupang.com/np/categories/449939",  # 가공식품
-    }
+    search_url_template = "https://www.coupang.com/np/search?q={keyword}&channel=user"
 
     async def _fetch_products(self, page: Page, url: str) -> list[dict]:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)

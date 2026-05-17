@@ -20,7 +20,8 @@ def _load_crawler(crawler_key: str):
     return getattr(module, class_name)()
 
 
-async def run_market(crawler_key: str, category_key: str, market_id: int, category_id: int) -> int:
+async def run_market(crawler_key: str, category_key: str, keyword: str,
+                    market_id: int, category_id: int) -> int:
     """단일 마켓·카테고리 크롤링 실행 → DB 저장 → 저장 건수 반환"""
     try:
         crawler = _load_crawler(crawler_key)
@@ -29,7 +30,7 @@ async def run_market(crawler_key: str, category_key: str, market_id: int, catego
         return 0
 
     try:
-        products = await crawler.crawl(category_key)
+        products = await crawler.crawl(category_key, keyword)
     except Exception as e:
         logger.error(f"[{crawler_key}] 크롤링 실패: {e}")
         return 0
@@ -54,7 +55,7 @@ async def run_market(crawler_key: str, category_key: str, market_id: int, catego
         except Exception as e:
             logger.error(f"[{crawler_key}] 상품 저장 오류 ({item.get('name')}): {e}")
 
-    logger.info(f"[{crawler_key}] '{category_key}' {saved}/{len(products)}건 저장 완료")
+    logger.info(f"[{crawler_key}] '{keyword}' {saved}/{len(products)}건 저장 완료")
     return saved
 
 
@@ -74,13 +75,17 @@ async def run_all(category_key: str = "vegetable",
     if market_keys:
         markets = [m for m in markets if m["crawler_key"] in market_keys]
 
-    category_id = repo.get_category_id(category_key)
-    if category_id is None:
+    category = repo.get_category(category_key)
+    if category is None:
         logger.error(f"카테고리 '{category_key}' 가 DB에 없습니다. setup_db.py를 먼저 실행하세요.")
         return {}
 
+    category_id = category["id"]
+    keyword = category["search_keyword"] or category["name"]
+    logger.info(f"카테고리='{category_key}', 검색어='{keyword}'")
+
     tasks = {
-        m["crawler_key"]: run_market(m["crawler_key"], category_key, m["id"], category_id)
+        m["crawler_key"]: run_market(m["crawler_key"], category_key, keyword, m["id"], category_id)
         for m in markets
     }
 

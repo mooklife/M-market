@@ -8,11 +8,7 @@ from crawler.base import BaseCrawler
 
 class EmartCrawler(BaseCrawler):
     market_key = "emart"
-    category_url = {
-        "vegetable": "https://emart.ssg.com/category/categoryView.ssg?dispCtgId=6000048393",  # 채소
-        "fruit":     "https://emart.ssg.com/category/categoryView.ssg?dispCtgId=6000048392",  # 과일
-        "grocery":   "https://emart.ssg.com/category/categoryView.ssg?dispCtgId=6000048447",  # 가공식품
-    }
+    search_url_template = "https://emart.ssg.com/search/searchGate.ssg?query={keyword}"
 
     async def _fetch_products(self, page: Page, url: str) -> list[dict]:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)

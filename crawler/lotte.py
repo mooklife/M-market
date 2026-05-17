@@ -8,11 +8,7 @@ from crawler.base import BaseCrawler
 
 class LotteCrawler(BaseCrawler):
     market_key = "lotte"
-    category_url = {
-        "vegetable": "https://www.lotteon.com/p/display/shop/seltDpShop/12067?dpShopPage=1&dpShopTab=2",  # 채소
-        "fruit":     "https://www.lotteon.com/p/display/shop/seltDpShop/12066?dpShopPage=1&dpShopTab=2",  # 과일
-        "grocery":   "https://www.lotteon.com/p/display/shop/seltDpShop/12069?dpShopPage=1&dpShopTab=2",  # 가공식품
-    }
+    search_url_template = "https://www.lotteon.com/p/search?q={keyword}&mall_tp=PO"
 
     async def _fetch_products(self, page: Page, url: str) -> list[dict]:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)

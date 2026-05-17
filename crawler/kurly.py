@@ -8,11 +8,7 @@ from crawler.base import BaseCrawler
 
 class KurlyCrawler(BaseCrawler):
     market_key = "kurly"
-    category_url = {
-        "vegetable": "https://www.kurly.com/categories/882",  # 채소
-        "fruit":     "https://www.kurly.com/categories/883",  # 과일
-        "grocery":   "https://www.kurly.com/categories/891",  # 간편식품
-    }
+    search_url_template = "https://www.kurly.com/search?sword={keyword}"
 
     async def _fetch_products(self, page: Page, url: str) -> list[dict]:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)

@@ -20,6 +20,35 @@
     <div id="crawl-result" style="margin-top:12px; font-size:0.875rem; color:var(--text-muted);"></div>
 </div>
 
+<!-- 카테고리 검색어 관리 -->
+<div class="card" style="margin-bottom:24px;">
+    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">카테고리 검색어 관리</h2>
+    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
+        크롤링 시 각 마켓에서 사용할 검색어입니다. 변경 후 크롤링을 실행하면 새 키워드로 수집됩니다.
+    </p>
+    <table>
+        <thead>
+            <tr><th>카테고리</th><th>현재 검색어</th><th>변경</th></tr>
+        </thead>
+        <tbody>
+        {% for cat in categories %}
+        <tr>
+            <td><strong>{{ cat.name }}</strong> <code style="font-size:0.75rem; color:var(--text-muted);">{{ cat.key }}</code></td>
+            <td>
+                <input id="kw-{{ cat.key }}" type="text" value="{{ cat.search_keyword }}"
+                       style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; width:160px;">
+            </td>
+            <td>
+                <button class="btn btn-outline" style="font-size:0.75rem; padding:5px 10px;"
+                        onclick="updateKeyword('{{ cat.key }}')">저장</button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div id="keyword-result" style="margin-top:10px; font-size:0.875rem; color:var(--text-muted);"></div>
+</div>
+
 <!-- 마켓 목록 -->
 <div class="card">
     <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">등록 마켓</h2>
@@ -89,6 +118,14 @@ async function checkStatus() {
     } else {
         el.textContent = '대기 중';
     }
+}
+
+async function updateKeyword(catKey) {
+    const kw = document.getElementById(`kw-${catKey}`).value.trim();
+    if (!kw) return;
+    const res = await fetch(`/api/categories/${catKey}/keyword?keyword=${encodeURIComponent(kw)}`, { method: 'POST' });
+    const data = await res.json();
+    document.getElementById('keyword-result').textContent = `✅ '${catKey}' 검색어를 '${data.keyword}'로 저장했습니다.`;
 }
 
 async function toggleMarket(key, active) {

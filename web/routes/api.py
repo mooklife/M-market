@@ -29,6 +29,13 @@ def toggle_market(crawler_key: str, active: bool):
     return {"ok": True}
 
 
+@router.post("/categories/{key}/keyword")
+def update_keyword(key: str, keyword: str):
+    """카테고리 검색어 변경"""
+    repo.update_category_keyword(key, keyword)
+    return {"ok": True, "key": key, "keyword": keyword}
+
+
 @router.get("/products")
 def get_products(category: str = Query(default="vegetable")):
     """카테고리별 상품 목록 — 마켓별 최신 판매가 포함"""

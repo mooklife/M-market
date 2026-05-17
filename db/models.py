@@ -2,6 +2,7 @@
 
 TBL_CATEGORIES = "categories"
 TBL_MARKETS = "markets"
+TBL_SEARCH_ITEMS = "search_items"
 TBL_PRODUCTS = "products"
 TBL_PRICE_HISTORY = "price_history"
 
@@ -23,17 +24,29 @@ CREATE TABLE IF NOT EXISTS markets (
     created_at     TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS products (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    market_id    INTEGER NOT NULL,
-    category_id  INTEGER NOT NULL,
-    name         TEXT NOT NULL,
-    unit         TEXT,
-    product_url  TEXT,
-    created_at   TEXT NOT NULL,
-    FOREIGN KEY (market_id)   REFERENCES markets(id),
+CREATE TABLE IF NOT EXISTS search_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    is_active   INTEGER DEFAULT 1,
+    sort_order  INTEGER DEFAULT 0,
     FOREIGN KEY (category_id) REFERENCES categories(id),
-    UNIQUE (market_id, name, unit)
+    UNIQUE (category_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS products (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    market_id      INTEGER NOT NULL,
+    category_id    INTEGER NOT NULL,
+    search_item_id INTEGER,
+    name           TEXT NOT NULL,
+    unit           TEXT,
+    product_url    TEXT,
+    created_at     TEXT NOT NULL,
+    FOREIGN KEY (market_id)      REFERENCES markets(id),
+    FOREIGN KEY (category_id)    REFERENCES categories(id),
+    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    UNIQUE (market_id, search_item_id, name, unit)
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
