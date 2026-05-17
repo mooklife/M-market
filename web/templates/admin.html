@@ -1,136 +1,153 @@
 {% extends "base.html" %}
 
-{% block title %}관리 — M-Market{% endblock %}
+{% block title %}관리자 — M-Market{% endblock %}
 
 {% block content %}
-<h1 class="page-title">⚙️ 관리</h1>
+<h1 class="page-title">관리자</h1>
 
-<!-- 크롤링 실행 -->
-<div class="card" style="margin-bottom:24px;">
-    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">수동 크롤링</h2>
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <select id="crawl-category">
-            {% for cat in categories %}
-            <option value="{{ cat.key }}">{{ cat.name }}</option>
-            {% endfor %}
-        </select>
-        <button class="btn btn-primary" onclick="runCrawl()">🔄 지금 크롤링</button>
-        <button class="btn btn-outline" onclick="checkStatus()">상태 확인</button>
+<!-- 카테고리 탭 -->
+<div style="display:flex; gap:6px; margin-bottom:24px; flex-wrap:wrap;">
+    {% for cat in categories %}
+    <a href="/admin?category={{ cat.key }}"
+       style="padding:6px 16px; border-radius:20px; font-size:0.9rem; text-decoration:none;
+              background:{% if cat.key == current_category %}var(--primary){% else %}var(--card-bg){% endif %};
+              color:{% if cat.key == current_category %}#fff{% else %}var(--text){% endif %};
+              border:1px solid {% if cat.key == current_category %}var(--primary){% else %}var(--border){% endif %};">
+        {{ cat.name }}
+    </a>
+    {% endfor %}
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px;">
+
+    <!-- 품목 관리 -->
+    <div class="card">
+        <h2 style="font-size:1rem; margin-bottom:14px;">📋 추적 품목 관리</h2>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+            <input id="newItemName" type="text" placeholder="품목명 (예: 양파)"
+                   style="flex:1;" onkeydown="if(event.key==='Enter') addItem()">
+            <button class="btn btn-primary" onclick="addItem()">추가</button>
+        </div>
+        <div id="itemList">
+        {% for item in search_items %}
+        <div id="item-row-{{ item.id }}" style="display:flex; align-items:center; justify-content:space-between;
+             padding:7px 10px; border-radius:6px; border:1px solid var(--border); margin-bottom:6px;
+             opacity:{% if item.is_active %}1{% else %}0.45{% endif %};">
+            <span style="font-size:0.92rem;">{{ item.name }}</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn" style="font-size:0.75rem; padding:3px 8px;"
+                        onclick="toggleItem({{ item.id }}, {{ 'true' if not item.is_active else 'false' }}, this)">
+                    {% if item.is_active %}비활성{% else %}활성{% endif %}
+                </button>
+                <button class="btn" style="font-size:0.75rem; padding:3px 8px; color:#ef4444; border-color:#ef4444;"
+                        onclick="deleteItem({{ item.id }})">삭제</button>
+            </div>
+        </div>
+        {% else %}
+        <p style="color:var(--text-muted); font-size:0.88rem;">등록된 품목이 없습니다.</p>
+        {% endfor %}
+        </div>
     </div>
-    <div id="crawl-result" style="margin-top:12px; font-size:0.875rem; color:var(--text-muted);"></div>
-</div>
 
-<!-- 카테고리 검색어 관리 -->
-<div class="card" style="margin-bottom:24px;">
-    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">카테고리 검색어 관리</h2>
-    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
-        크롤링 시 각 마켓에서 사용할 검색어입니다. 변경 후 크롤링을 실행하면 새 키워드로 수집됩니다.
-    </p>
-    <table>
-        <thead>
-            <tr><th>카테고리</th><th>현재 검색어</th><th>변경</th></tr>
-        </thead>
-        <tbody>
-        {% for cat in categories %}
-        <tr>
-            <td><strong>{{ cat.name }}</strong> <code style="font-size:0.75rem; color:var(--text-muted);">{{ cat.key }}</code></td>
-            <td>
-                <input id="kw-{{ cat.key }}" type="text" value="{{ cat.search_keyword }}"
-                       style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; width:160px;">
-            </td>
-            <td>
-                <button class="btn btn-outline" style="font-size:0.75rem; padding:5px 10px;"
-                        onclick="updateKeyword('{{ cat.key }}')">저장</button>
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    <div id="keyword-result" style="margin-top:10px; font-size:0.875rem; color:var(--text-muted);"></div>
-</div>
+    <!-- 크롤링 실행 -->
+    <div style="display:grid; gap:18px; align-content:start;">
+        <div class="card">
+            <h2 style="font-size:1rem; margin-bottom:14px;">🔄 크롤링 실행</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                <button class="btn btn-primary" onclick="runCrawl()">전체 품목 크롤링</button>
+                <button class="btn" onclick="checkStatus()" style="font-size:0.85rem;">상태 확인</button>
+            </div>
+            <div id="crawl-alert" style="display:none;"></div>
+            <div id="crawl-status" style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;"></div>
+        </div>
 
-<!-- 마켓 목록 -->
-<div class="card">
-    <h2 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">등록 마켓</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>마켓명</th>
-                <th>URL</th>
-                <th>크롤러 키</th>
-                <th>로그인 필요</th>
-                <th>상태</th>
-                <th>변경</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for market in markets %}
-        <tr>
-            <td><strong>{{ market.name }}</strong></td>
-            <td>
-                <a href="{{ market.url }}" target="_blank"
-                   style="color:var(--primary); font-size:0.8rem; word-break:break-all;">
-                    {{ market.url }}
-                </a>
-            </td>
-            <td><code style="font-size:0.8rem; background:var(--bg); padding:2px 6px; border-radius:4px;">{{ market.crawler_key }}</code></td>
-            <td>{% if market.login_required %}<span class="badge badge-red">필요</span>{% else %}<span class="badge badge-green">불필요</span>{% endif %}</td>
-            <td>
-                {% if market.is_active %}
-                <span class="badge badge-green">활성</span>
-                {% else %}
-                <span class="badge badge-red" style="background:#fef2f2;">비활성</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if market.is_active %}
-                <button class="btn btn-outline" style="font-size:0.75rem; padding:5px 10px;"
-                        onclick="toggleMarket('{{ market.crawler_key }}', false)">비활성화</button>
-                {% else %}
-                <button class="btn btn-primary" style="font-size:0.75rem; padding:5px 10px;"
-                        onclick="toggleMarket('{{ market.crawler_key }}', true)">활성화</button>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+        <!-- 마켓 관리 -->
+        <div class="card">
+            <h2 style="font-size:1rem; margin-bottom:14px;">🏪 마켓 관리</h2>
+            {% for market in markets %}
+            <div style="display:flex; align-items:center; justify-content:space-between;
+                 padding:8px 10px; border-radius:6px; border:1px solid var(--border); margin-bottom:6px;">
+                <div>
+                    <span style="font-weight:600; font-size:0.9rem;">{{ market.name }}</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted); margin-left:8px;">{{ market.crawler_key }}</span>
+                </div>
+                <button class="btn" style="font-size:0.75rem; padding:3px 8px;
+                    {% if market.is_active %}color:var(--success);border-color:var(--success);{% else %}color:var(--text-muted);{% endif %}"
+                    onclick="toggleMarket('{{ market.crawler_key }}', {{ 'false' if market.is_active else 'true' }}, this)">
+                    {% if market.is_active %}활성{% else %}비활성{% endif %}
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
 </div>
 
 <script>
+const currentCategory = '{{ current_category }}';
+
+async function addItem() {
+    const input = document.getElementById('newItemName');
+    const name = input.value.trim();
+    if (!name) return;
+    const res = await fetch(`/api/items?category=${currentCategory}&name=${encodeURIComponent(name)}`, { method: 'POST' });
+    if (res.ok) {
+        input.value = '';
+        location.reload();
+    } else {
+        alert('추가 실패: ' + await res.text());
+    }
+}
+
+async function toggleItem(id, active, btn) {
+    await fetch(`/api/items/${id}/toggle?active=${active}`, { method: 'POST' });
+    location.reload();
+}
+
+async function deleteItem(id) {
+    if (!confirm('이 품목을 삭제하시겠습니까?')) return;
+    await fetch(`/api/items/${id}`, { method: 'DELETE' });
+    document.getElementById(`item-row-${id}`).remove();
+}
+
+async function toggleMarket(key, active, btn) {
+    await fetch(`/api/markets/${key}/toggle?active=${active}`, { method: 'POST' });
+    btn.textContent = active ? '활성' : '비활성';
+    btn.style.color = active ? 'var(--success)' : 'var(--text-muted)';
+    btn.style.borderColor = active ? 'var(--success)' : '';
+    btn.setAttribute('onclick', `toggleMarket('${key}', ${!active}, this)`);
+}
+
 async function runCrawl() {
-    const cat = document.getElementById('crawl-category').value;
-    const res = await fetch(`/api/crawl?category=${cat}`, { method: 'POST' });
+    const alert = document.getElementById('crawl-alert');
+    alert.style.display = 'block';
+    alert.className = 'alert alert-info';
+    alert.textContent = '⏳ 크롤링 시작 중...';
+    const res = await fetch(`/api/crawl?category=${currentCategory}`, { method: 'POST' });
     const data = await res.json();
-    document.getElementById('crawl-result').textContent = data.message;
+    alert.textContent = data.message;
+    if (!data.ok) alert.className = 'alert alert-warning';
+    else pollStatus();
 }
 
 async function checkStatus() {
     const res = await fetch('/api/crawl/status');
     const data = await res.json();
-    const el = document.getElementById('crawl-result');
-    if (data.running) {
-        el.textContent = '⏳ 크롤링 진행 중...';
-    } else if (data.last_result) {
-        const summary = Object.entries(data.last_result)
-            .map(([k, v]) => `${k}: ${v}건`).join(', ');
-        el.textContent = `✅ 마지막 결과 — ${summary}`;
-    } else {
-        el.textContent = '대기 중';
-    }
+    const el = document.getElementById('crawl-status');
+    el.textContent = data.running
+        ? '⏳ 크롤링 진행 중...'
+        : (data.last_result ? '✅ 마지막 결과: ' + JSON.stringify(data.last_result) : '대기 중');
 }
 
-async function updateKeyword(catKey) {
-    const kw = document.getElementById(`kw-${catKey}`).value.trim();
-    if (!kw) return;
-    const res = await fetch(`/api/categories/${catKey}/keyword?keyword=${encodeURIComponent(kw)}`, { method: 'POST' });
-    const data = await res.json();
-    document.getElementById('keyword-result').textContent = `✅ '${catKey}' 검색어를 '${data.keyword}'로 저장했습니다.`;
-}
-
-async function toggleMarket(key, active) {
-    await fetch(`/api/markets/${key}/toggle?active=${active}`, { method: 'POST' });
-    location.reload();
+function pollStatus() {
+    const timer = setInterval(async () => {
+        const res = await fetch('/api/crawl/status');
+        const data = await res.json();
+        if (!data.running) {
+            clearInterval(timer);
+            document.getElementById('crawl-status').textContent =
+                '✅ 완료: ' + JSON.stringify(data.last_result);
+        }
+    }, 3000);
 }
 </script>
 {% endblock %}

@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ current_category | replace('vegetable','야채') | replace('fruit','과일') | replace('grocery','식료품') }} 가격 비교 — M-Market{% endblock %}
+{% block title %}
+{% if current_category == 'vegetable' %}야채{% elif current_category == 'fruit' %}과일{% else %}식료품{% endif %}
+가격 비교 — M-Market
+{% endblock %}
 
 {% block content %}
 <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
@@ -17,74 +20,81 @@
             <option value="{{ cat.key }}" {% if cat.key == current_category %}selected{% endif %}>{{ cat.name }}</option>
             {% endfor %}
         </select>
-        <button class="btn btn-primary" onclick="triggerCrawl()">🔄 크롤링 실행</button>
+        <button class="btn btn-primary" onclick="triggerCrawl()">🔄 크롤링</button>
     </div>
 </div>
 
-<div id="crawl-alert" style="display:none;" class="alert alert-info">크롤링을 시작했습니다. 완료까지 수 분 소요될 수 있습니다.</div>
+<div id="crawl-alert" style="display:none;" class="alert alert-info"></div>
 
-{% if not grouped_products %}
+{% if not items_with_prices %}
 <div class="card" style="text-align:center; padding:48px; color:var(--text-muted);">
     <p style="font-size:2rem; margin-bottom:12px;">📭</p>
-    <p>아직 수집된 데이터가 없습니다.</p>
-    <p style="margin-top:8px; font-size:0.875rem;">우측 상단의 <strong>크롤링 실행</strong> 버튼을 눌러 데이터를 수집하세요.</p>
+    <p>수집된 데이터가 없습니다.</p>
+    <p style="margin-top:8px; font-size:0.875rem;"><strong>크롤링</strong> 버튼을 눌러 데이터를 수집하세요.</p>
+    <p style="margin-top:4px; font-size:0.8rem; color:var(--text-muted);">품목 관리는 <a href="/admin?category={{ current_category }}" style="color:var(--primary);">관리 페이지</a>에서 할 수 있습니다.</p>
 </div>
 {% else %}
 
-<div style="display:grid; gap:16px;">
-{% for product_name, market_items in grouped_products %}
+<div style="display:grid; gap:14px;">
+{% for item in items_with_prices %}
 <div class="card">
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
-        <a href="/product/{{ product_name | urlencode }}?category={{ current_category }}"
-           style="font-size:1.1rem; font-weight:700; color:var(--text); text-decoration:none;">
-            {{ product_name }}
-            <span style="font-size:0.75rem; color:var(--primary); margin-left:4px;">추세 보기 →</span>
+        <a href="/item/{{ item.item_id }}?category={{ current_category }}"
+           style="font-size:1.15rem; font-weight:700; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:8px;">
+            {{ item.item_name }}
+            <span style="font-size:0.75rem; color:var(--primary); font-weight:400;">추세 →</span>
         </a>
-        {% set prices = market_items | selectattr('sale_price') | list %}
-        {% if prices %}
-            {% set min_price = prices | map(attribute='sale_price') | min %}
-            <span class="badge badge-green">최저 {{ "{:,}".format(min_price) }}원</span>
+        {% set priced = item.markets | selectattr('sale_price') | list %}
+        {% if priced %}
+            {% set min_price = priced | map(attribute='sale_price') | min %}
+            {% set min_market = priced | selectattr('sale_price', 'equalto', min_price) | first %}
+            <span class="badge badge-green">최저 {{ "{:,}".format(min_price) }}원 ({{ min_market.market_name }})</span>
+        {% else %}
+            <span style="font-size:0.8rem; color:var(--text-muted);">가격 정보 없음</span>
         {% endif %}
     </div>
 
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;">
-    {% for item in market_items %}
-    <div style="border:1px solid var(--border); border-radius:8px; padding:14px;">
-        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:6px; font-weight:600;">
-            {{ item.market_name }}
+    {% if not item.markets %}
+    <div style="font-size:0.85rem; color:var(--text-muted);">아직 수집된 데이터가 없습니다.</div>
+    {% else %}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:10px;">
+    {% for m in item.markets %}
+    <div style="border:1px solid var(--border); border-radius:8px; padding:12px;
+                {% if m.sale_price and priced and m.sale_price == min_price %}border-color:var(--success);{% endif %}">
+        <div style="font-size:0.78rem; color:var(--text-muted); font-weight:600; margin-bottom:4px;">{{ m.market_name }}</div>
+        {% if m.product_name %}
+        <div style="font-size:0.82rem; font-weight:600; color:var(--text); margin-bottom:3px; line-height:1.3;"
+             title="{{ m.product_name }}">
+            {{ m.product_name | truncate(24, true, '…') }}
         </div>
-        {% if item.unit %}
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">{{ item.unit }}</div>
         {% endif %}
-        {% if item.sale_price %}
-            {% if item.discount_rate and item.discount_rate > 0 %}
-            <div class="price price-sale">{{ "{:,}".format(item.sale_price) }}원</div>
-            <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                <span class="badge badge-red">{{ (item.discount_rate * 100) | int }}% 할인</span>
-                {% if item.original_price %}
-                <span class="price-original">{{ "{:,}".format(item.original_price) }}원</span>
+        {% if m.unit %}<div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:3px;">{{ m.unit }}</div>{% endif %}
+        {% if m.sale_price %}
+            <div class="price {% if m.discount_rate and m.discount_rate > 0 %}price-sale{% endif %}">
+                {{ "{:,}".format(m.sale_price) }}원
+            </div>
+            {% if m.discount_rate and m.discount_rate > 0 %}
+            <div style="display:flex; align-items:center; gap:5px; margin-top:2px; flex-wrap:wrap;">
+                <span class="badge badge-red">{{ (m.discount_rate * 100) | int }}%↓</span>
+                {% if m.original_price %}
+                <span class="price-original">{{ "{:,}".format(m.original_price) }}원</span>
                 {% endif %}
             </div>
-            {% else %}
-            <div class="price">{{ "{:,}".format(item.sale_price) }}원</div>
             {% endif %}
-            {% if item.collected_at %}
-            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:6px;">
-                {{ item.collected_at[:10] }} 수집
-            </div>
+            {% if m.collected_at %}
+            <div style="font-size:0.68rem; color:var(--text-muted); margin-top:5px;">{{ m.collected_at[:10] }}</div>
             {% endif %}
-            {% if item.product_url %}
-            <a href="{{ item.product_url }}" target="_blank"
-               style="font-size:0.75rem; color:var(--primary); text-decoration:none; margin-top:6px; display:inline-block;">
-                마켓에서 보기 →
-            </a>
+            {% if m.product_url %}
+            <a href="{{ m.product_url }}" target="_blank"
+               style="font-size:0.72rem; color:var(--primary); text-decoration:none; margin-top:5px; display:inline-block;">마켓 보기 →</a>
             {% endif %}
         {% else %}
-        <div style="color:var(--text-muted); font-size:0.85rem;">가격 정보 없음</div>
+        <div style="color:var(--text-muted); font-size:0.82rem; margin-top:4px;">미수집</div>
         {% endif %}
     </div>
     {% endfor %}
     </div>
+    {% endif %}
 </div>
 {% endfor %}
 </div>
@@ -94,11 +104,13 @@
 async function triggerCrawl() {
     const alert = document.getElementById('crawl-alert');
     alert.style.display = 'block';
+    alert.textContent = '⏳ 크롤링을 시작했습니다...';
+    alert.className = 'alert alert-info';
     try {
         const res = await fetch('/api/crawl?category={{ current_category }}', { method: 'POST' });
         const data = await res.json();
         alert.textContent = data.message;
-        alert.className = 'alert ' + (data.ok ? 'alert-info' : 'alert-warning');
+        if (!data.ok) alert.className = 'alert alert-warning';
     } catch (e) {
         alert.textContent = '크롤링 요청 중 오류가 발생했습니다.';
         alert.className = 'alert alert-warning';

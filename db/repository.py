@@ -77,46 +77,152 @@ def update_category_keyword(key: str, search_keyword: str) -> None:
         )
 
 
-# ── 상품 ──────────────────────────────────────────────────────────────────────
+# ── 추적 품목 ─────────────────────────────────────────────────────────────────
 
-def upsert_product(market_id: int, category_id: int, name: str,
-                   unit: Optional[str], product_url: Optional[str]) -> int:
-    now = get_kst_now_str()
+def get_search_items(category_key: str, active_only: bool = True) -> list[dict]:
+    """카테고리별 추적 품목 목록 (예: 양파, 당근, ...)"""
+    query = """SELECT si.id, si.name, si.is_active, si.sort_order, c.key AS category_key
+               FROM search_items si
+               JOIN categories c ON si.category_id = c.id
+               WHERE c.key = ?"""
+    if active_only:
+        query += " AND si.is_active = 1"
+    query += " ORDER BY si.sort_order, si.name"
+    with get_db() as conn:
+        rows = conn.execute(query, (category_key,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_search_item(category_key: str, name: str) -> int:
+    cat = get_category(category_key)
+    if cat is None:
+        raise ValueError(f"카테고리 '{category_key}' 없음")
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO products (market_id, category_id, name, unit, product_url, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT(market_id, name, unit) DO UPDATE SET
-                   product_url=excluded.product_url""",
-            (market_id, category_id, name, unit, product_url, now),
+            "INSERT OR IGNORE INTO search_items (category_id, name) VALUES (?, ?)",
+            (cat["id"], name.strip()),
         )
         row = conn.execute(
-            "SELECT id FROM products WHERE market_id=? AND name=? AND unit IS ?",
-            (market_id, name, unit),
+            "SELECT id FROM search_items WHERE category_id=? AND name=?",
+            (cat["id"], name.strip()),
         ).fetchone()
     return row["id"]
 
 
+def toggle_search_item(item_id: int, is_active: bool) -> None:
+    with get_db() as conn:
+        conn.execute("UPDATE search_items SET is_active=? WHERE id=?", (int(is_active), item_id))
+
+
+def delete_search_item(item_id: int) -> None:
+    with get_db() as conn:
+        conn.execute("DELETE FROM search_items WHERE id=?", (item_id,))
+
+
+# ── 상품 ──────────────────────────────────────────────────────────────────────
+
+def upsert_product(market_id: int, category_id: int, search_item_id: int,
+                   name: str, unit: Optional[str], product_url: Optional[str]) -> int:
+    now = get_kst_now_str()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO products
+                   (market_id, category_id, search_item_id, name, unit, product_url, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(market_id, search_item_id, name, unit) DO UPDATE SET
+                   product_url=excluded.product_url,
+                   search_item_id=excluded.search_item_id""",
+            (market_id, category_id, search_item_id, name, unit, product_url, now),
+        )
+        row = conn.execute(
+            """SELECT id FROM products
+               WHERE market_id=? AND search_item_id=? AND name=? AND unit IS ?""",
+            (market_id, search_item_id, name, unit),
+        ).fetchone()
+    return row["id"]
+
+
+def get_items_with_latest_prices(category_key: str) -> list[dict]:
+    """품목별 + 마켓별 최신 가격 (메인 화면용)"""
+    with get_db() as conn:
+        items = conn.execute(
+            """SELECT si.id, si.name, si.sort_order
+               FROM search_items si
+               JOIN categories c ON si.category_id = c.id
+               WHERE c.key = ? AND si.is_active = 1
+               ORDER BY si.sort_order, si.name""",
+            (category_key,),
+        ).fetchall()
+
+        result = []
+        for item in items:
+            market_rows = conn.execute(
+                """SELECT p.id AS product_id, p.name AS product_name, p.unit, p.product_url,
+                          m.name AS market_name, m.crawler_key,
+                          ph.sale_price, ph.original_price, ph.discount_rate, ph.collected_at
+                   FROM products p
+                   JOIN markets m ON p.market_id = m.id
+                   LEFT JOIN price_history ph ON ph.id = (
+                       SELECT id FROM price_history
+                       WHERE product_id = p.id
+                       ORDER BY collected_at DESC LIMIT 1
+                   )
+                   WHERE p.search_item_id = ? AND m.is_active = 1
+                   ORDER BY ph.sale_price ASC""",
+                (item["id"],),
+            ).fetchall()
+
+            # 마켓당 최저가 1개만
+            by_market: dict[str, dict] = {}
+            for row in market_rows:
+                r = dict(row)
+                mname = r["market_name"]
+                if mname not in by_market:
+                    by_market[mname] = r
+                elif r["sale_price"] and (
+                    not by_market[mname]["sale_price"]
+                    or r["sale_price"] < by_market[mname]["sale_price"]
+                ):
+                    by_market[mname] = r
+
+            result.append({
+                "item_id": item["id"],
+                "item_name": item["name"],
+                "markets": list(by_market.values()),
+            })
+    return result
+
+
 def get_products_by_category(category_key: str) -> list[dict]:
-    """카테고리별 상품 목록 (각 상품의 마켓별 최신 판매가 포함)"""
+    """카테고리별 상품 목록 (레거시 — api.py 호환용)"""
     with get_db() as conn:
         rows = conn.execute(
             """SELECT p.id, p.name, p.unit, p.product_url,
+                      si.name AS item_name,
                       m.name AS market_name, m.crawler_key,
                       ph.sale_price, ph.original_price, ph.discount_rate, ph.collected_at
                FROM products p
                JOIN markets m ON p.market_id = m.id
                JOIN categories c ON p.category_id = c.id
+               LEFT JOIN search_items si ON p.search_item_id = si.id
                LEFT JOIN price_history ph ON ph.id = (
                    SELECT id FROM price_history
                    WHERE product_id = p.id
                    ORDER BY collected_at DESC LIMIT 1
                )
                WHERE c.key = ? AND m.is_active = 1
-               ORDER BY p.name, m.name""",
+               ORDER BY si.sort_order, si.name, m.name""",
             (category_key,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_product_ids_by_search_item(search_item_id: int) -> list[int]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id FROM products WHERE search_item_id = ?", (search_item_id,)
+        ).fetchall()
+    return [r["id"] for r in rows]
 
 
 def get_product_by_id(product_id: int) -> Optional[dict]:

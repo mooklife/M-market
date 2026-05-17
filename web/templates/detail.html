@@ -1,145 +1,105 @@
 {% extends "base.html" %}
 
-{% block title %}{{ product_name }} 가격 추세 — M-Market{% endblock %}
-
-{% block extra_head %}
-<style>
-.chart-container {
-    position: relative;
-    height: 380px;
-    width: 100%;
-}
-.market-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 16px;
-}
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-}
-.legend-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-</style>
-{% endblock %}
+{% block title %}{{ item.name if item else '품목' }} 90일 추세 — M-Market{% endblock %}
 
 {% block content %}
-<div style="margin-bottom:20px;">
-    <a href="/{% if current_category %}?category={{ current_category }}{% endif %}"
-       style="color:var(--primary); text-decoration:none; font-size:0.875rem;">← 목록으로</a>
+<div style="margin-bottom:18px;">
+    <a href="/?category={{ current_category }}"
+       style="color:var(--primary); text-decoration:none; font-size:0.9rem;">← 목록으로</a>
 </div>
 
-<h1 class="page-title">{{ product_name }} — 마켓별 가격 추세</h1>
-
-<div style="display:flex; gap:10px; align-items:center; margin-bottom:24px; flex-wrap:wrap;">
-    <label style="font-size:0.875rem; color:var(--text-muted);">기간:</label>
-    {% for d in [7, 30, 60, 90] %}
-    <a href="/product/{{ product_name | urlencode }}?category={{ current_category }}&days={{ d }}"
-       class="btn {% if days == d %}btn-primary{% else %}btn-outline{% endif %}">{{ d }}일</a>
-    {% endfor %}
-</div>
-
-{% if not history %}
-<div class="card" style="text-align:center; padding:48px; color:var(--text-muted);">
-    <p style="font-size:2rem; margin-bottom:12px;">📉</p>
-    <p>{{ days }}일 이내 가격 데이터가 없습니다.</p>
+{% if not item %}
+<div class="card" style="text-align:center; padding:40px; color:var(--text-muted);">
+    <p>품목 정보를 찾을 수 없습니다.</p>
 </div>
 {% else %}
+<h2 style="margin-bottom:20px;">{{ item.name }} — 마켓별 가격 추세</h2>
 
-<div class="card" style="margin-bottom:24px;">
-    <div class="chart-container">
-        <canvas id="priceChart"></canvas>
-    </div>
-</div>
-
-<!-- 마켓별 현재가 카드 -->
-<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
-{% for item in matched_products %}
-{% if item.sale_price %}
-<div class="card" style="padding:16px;">
-    <div style="font-weight:700; margin-bottom:8px;">{{ item.market_name }}</div>
-    {% if item.unit %}<div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:4px;">{{ item.unit }}</div>{% endif %}
-    <div class="price {% if item.discount_rate and item.discount_rate > 0 %}price-sale{% endif %}">
-        {{ "{:,}".format(item.sale_price) }}원
-    </div>
-    {% if item.discount_rate and item.discount_rate > 0 %}
-    <div style="margin-top:4px;">
-        <span class="badge badge-red">{{ (item.discount_rate * 100) | int }}% 할인</span>
-        {% if item.original_price %}
-        <span class="price-original" style="margin-left:4px;">{{ "{:,}".format(item.original_price) }}원</span>
+{% if item_data %}
+<div class="card" style="margin-bottom:20px;">
+    <h3 style="margin-bottom:14px; font-size:0.95rem; color:var(--text-muted);">최신 가격 요약</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:10px;">
+    {% for m in item_data.markets %}
+    <div style="border:1px solid var(--border); border-radius:8px; padding:12px;">
+        <div style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">{{ m.market_name }}</div>
+        {% if m.sale_price %}
+        <div class="price" style="font-size:1.05rem; margin-top:4px;">{{ "{:,}".format(m.sale_price) }}원</div>
+        {% if m.discount_rate and m.discount_rate > 0 %}
+        <span class="badge badge-red">{{ (m.discount_rate * 100) | int }}%↓</span>
+        {% endif %}
+        {% else %}
+        <div style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">미수집</div>
         {% endif %}
     </div>
-    {% endif %}
-    {% if item.product_url %}
-    <a href="{{ item.product_url }}" target="_blank"
-       style="font-size:0.75rem; color:var(--primary); text-decoration:none; margin-top:8px; display:inline-block;">
-        마켓에서 보기 →
-    </a>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <h3 style="margin:0; font-size:0.95rem; color:var(--text-muted);">{{ days }}일 가격 이력</h3>
+        <select onchange="location.href='/item/{{ item.id }}?category={{ current_category }}&days='+this.value">
+            {% for d in [30, 60, 90] %}
+            <option value="{{ d }}" {% if d == days %}selected{% endif %}>최근 {{ d }}일</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% if history %}
+    <canvas id="priceChart" height="100"></canvas>
+    {% else %}
+    <div style="text-align:center; padding:40px; color:var(--text-muted);">
+        <p>가격 이력이 없습니다. 크롤링을 실행해 주세요.</p>
+    </div>
     {% endif %}
 </div>
 {% endif %}
-{% endfor %}
-</div>
 
+{% if history %}
 <script>
 const rawHistory = {{ history | tojson }};
 
-// 마켓별로 데이터 분리
-const marketMap = {};
+// 마켓별로 그룹핑
+const marketData = {};
 for (const row of rawHistory) {
     const key = row.market_name;
-    if (!marketMap[key]) marketMap[key] = [];
-    marketMap[key].push({ x: row.collected_at.slice(0, 10), y: row.sale_price });
+    if (!marketData[key]) marketData[key] = {};
+    const date = row.collected_at.split('T')[0];
+    if (!marketData[key][date] || row.sale_price < marketData[key][date]) {
+        marketData[key][date] = row.sale_price;
+    }
 }
 
-// 날짜 축 (전체 범위)
-const allDates = [...new Set(rawHistory.map(r => r.collected_at.slice(0, 10)))].sort();
+// 전체 날짜 목록
+const allDates = [...new Set(rawHistory.map(r => r.collected_at.split('T')[0]))].sort();
 
-const COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed'];
-const datasets = Object.entries(marketMap).map(([market, points], i) => {
-    const dateMap = Object.fromEntries(points.map(p => [p.x, p.y]));
-    return {
-        label: market,
-        data: allDates.map(d => ({ x: d, y: dateMap[d] ?? null })),
-        borderColor: COLORS[i % COLORS.length],
-        backgroundColor: COLORS[i % COLORS.length] + '22',
-        borderWidth: 2,
-        pointRadius: 3,
-        tension: 0.3,
-        spanGaps: true,
-    };
-});
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+const datasets = Object.entries(marketData).map(([market, dateMap], i) => ({
+    label: market,
+    data: allDates.map(d => dateMap[d] ?? null),
+    borderColor: COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length] + '20',
+    tension: 0.3,
+    spanGaps: true,
+    pointRadius: 3,
+}));
 
 new Chart(document.getElementById('priceChart'), {
     type: 'line',
     data: { labels: allDates, datasets },
     options: {
         responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'top' },
-            tooltip: {
-                callbacks: {
-                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toLocaleString()}원`
-                }
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            y: {
+                ticks: { callback: v => v.toLocaleString() + '원' },
+                beginAtZero: false,
             }
         },
-        scales: {
-            x: {
-                ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
-            },
-            y: {
-                ticks: {
-                    callback: v => v.toLocaleString() + '원'
-                }
-            }
+        plugins: {
+            tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw?.toLocaleString()}원` } },
+            legend: { position: 'bottom' },
         }
     }
 });

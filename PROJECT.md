@@ -81,47 +81,65 @@ M-market/
 
 ```sql
 CREATE TABLE categories (
-    id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    key  TEXT UNIQUE NOT NULL,  -- 'vegetable' | 'fruit' | 'grocery'
-    name TEXT NOT NULL          -- '야채' | '과일' | '식료품'
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    key            TEXT UNIQUE NOT NULL,   -- 'vegetable' | 'fruit' | 'grocery'
+    name           TEXT NOT NULL,          -- '야채' | '과일' | '식료품'
+    search_keyword TEXT NOT NULL DEFAULT ''
 );
 ```
 
-**초기 데이터**: `vegetable/야채` 1건 삽입.  
-과일·식료품 추가 시 레코드만 INSERT하면 됨.
+### 4-2. search_items (추적 품목 — 핵심)
 
-### 4-2. markets (마켓)
+카테고리 하위 실제 추적 대상 품목. 크롤러는 이 목록 기준으로 마켓별 검색을 실행한다.
+
+```sql
+CREATE TABLE search_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER NOT NULL,
+    name        TEXT NOT NULL,       -- '양파', '당근', '무', '가지', '콩나물' …
+    is_active   INTEGER DEFAULT 1,
+    sort_order  INTEGER DEFAULT 0,
+    FOREIGN KEY (category_id) REFERENCES categories(id),
+    UNIQUE (category_id, name)
+);
+```
+
+**초기 데이터**: `config/items.json` 에서 시드. 관리자 화면에서 추가/삭제/활성화 가능.
+
+### 4-3. markets (마켓)
 
 ```sql
 CREATE TABLE markets (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT NOT NULL,        -- '마켓컬리'
     url            TEXT NOT NULL,        -- 'https://www.kurly.com'
-    crawler_key    TEXT UNIQUE NOT NULL, -- 'kurly' (crawler/{key}.py 와 1:1 대응)
-    is_active      INTEGER DEFAULT 1,    -- 0: 비활성
-    login_required INTEGER DEFAULT 0,    -- 1: .env에서 ID/PW 읽어 로그인
-    created_at     TEXT NOT NULL         -- KST ISO8601
+    crawler_key    TEXT UNIQUE NOT NULL, -- 'kurly'
+    is_active      INTEGER DEFAULT 1,
+    login_required INTEGER DEFAULT 0,
+    created_at     TEXT NOT NULL
 );
 ```
 
-### 4-3. products (상품)
+### 4-4. products (상품)
 
 ```sql
 CREATE TABLE products (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    market_id    INTEGER NOT NULL,
-    category_id  INTEGER NOT NULL,
-    name         TEXT NOT NULL,   -- '대파', '양파'
-    unit         TEXT,            -- '1단', '1kg', '500g'
-    product_url  TEXT,            -- 상품 직접 URL
-    created_at   TEXT NOT NULL,
-    FOREIGN KEY (market_id)  REFERENCES markets(id),
-    FOREIGN KEY (category_id) REFERENCES categories(id),
-    UNIQUE (market_id, name, unit)  -- 마켓 내 중복 방지
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    market_id      INTEGER NOT NULL,
+    category_id    INTEGER NOT NULL,
+    search_item_id INTEGER,              -- 어떤 품목 검색으로 수집됐는지
+    name           TEXT NOT NULL,
+    unit           TEXT,                 -- '1단', '1kg', '500g'
+    product_url    TEXT,
+    created_at     TEXT NOT NULL,
+    FOREIGN KEY (market_id)      REFERENCES markets(id),
+    FOREIGN KEY (category_id)    REFERENCES categories(id),
+    FOREIGN KEY (search_item_id) REFERENCES search_items(id),
+    UNIQUE (market_id, search_item_id, name, unit)
 );
 ```
 
-### 4-4. price_history (가격 이력 — 핵심)
+### 4-5. price_history (가격 이력 — 핵심)
 
 ```sql
 CREATE TABLE price_history (

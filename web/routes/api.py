@@ -13,10 +13,20 @@ logger = setup_custom_logger("API", log_prefix="web")
 _crawl_status: dict = {"running": False, "last_result": None}
 
 
+# ── 카테고리 ──────────────────────────────────────────────────────────────────
+
 @router.get("/categories")
 def get_categories():
     return repo.get_categories()
 
+
+@router.post("/categories/{key}/keyword")
+def update_keyword(key: str, keyword: str):
+    repo.update_category_keyword(key, keyword)
+    return {"ok": True, "key": key, "keyword": keyword}
+
+
+# ── 마켓 ──────────────────────────────────────────────────────────────────────
 
 @router.get("/markets")
 def get_markets():
@@ -29,28 +39,49 @@ def toggle_market(crawler_key: str, active: bool):
     return {"ok": True}
 
 
-@router.post("/categories/{key}/keyword")
-def update_keyword(key: str, keyword: str):
-    """카테고리 검색어 변경"""
-    repo.update_category_keyword(key, keyword)
-    return {"ok": True, "key": key, "keyword": keyword}
+# ── 추적 품목 ─────────────────────────────────────────────────────────────────
 
+@router.get("/items")
+def get_items(category: str = Query(default="vegetable"), active_only: bool = Query(default=False)):
+    return repo.get_search_items(category, active_only=active_only)
+
+
+@router.post("/items")
+def add_item(category: str = Query(default="vegetable"), name: str = Query(...)):
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="name 필요")
+    item_id = repo.add_search_item(category, name.strip())
+    return {"ok": True, "id": item_id, "name": name.strip()}
+
+
+@router.post("/items/{item_id}/toggle")
+def toggle_item(item_id: int, active: bool):
+    repo.toggle_search_item(item_id, active)
+    return {"ok": True}
+
+
+@router.delete("/items/{item_id}")
+def delete_item(item_id: int):
+    repo.delete_search_item(item_id)
+    return {"ok": True}
+
+
+# ── 상품 / 가격 ───────────────────────────────────────────────────────────────
 
 @router.get("/products")
 def get_products(category: str = Query(default="vegetable")):
-    """카테고리별 상품 목록 — 마켓별 최신 판매가 포함"""
-    products = repo.get_products_by_category(category)
+    """품목 × 마켓 최신가 (메인 화면용)"""
+    return repo.get_items_with_latest_prices(category)
 
-    # 품목명으로 그룹핑 (UI에서 동일 야채를 마켓별로 비교)
-    grouped: dict[str, list] = {}
-    for p in products:
-        key = p["name"]
-        grouped.setdefault(key, []).append(p)
 
-    return [
-        {"name": name, "markets": items}
-        for name, items in sorted(grouped.items())
-    ]
+@router.get("/prices/item/{item_id}")
+def get_prices_by_item(item_id: int, days: int = Query(default=90, ge=1, le=365)):
+    """품목의 전체 마켓 가격 이력 (추세 차트용)"""
+    product_ids = repo.get_product_ids_by_search_item(item_id)
+    if not product_ids:
+        raise HTTPException(status_code=404, detail="가격 데이터 없음")
+    history = repo.get_price_history_multi(product_ids, days=days)
+    return {"item_id": item_id, "history": history}
 
 
 @router.get("/prices/{product_id}")
@@ -62,35 +93,21 @@ def get_prices(product_id: int, days: int = Query(default=90, ge=1, le=365)):
     return {"product": product, "history": history}
 
 
-@router.get("/prices/compare/{product_name}")
-def get_prices_compare(
-    product_name: str,
-    category: str = Query(default="vegetable"),
-    days: int = Query(default=90, ge=1, le=365),
-):
-    """같은 이름의 상품을 여러 마켓에서 비교 (추세 차트용)"""
-    all_products = repo.get_products_by_category(category)
-    matched = [p for p in all_products if p["name"] == product_name]
-    if not matched:
-        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다")
-
-    product_ids = list({p["id"] for p in matched})
-    history = repo.get_price_history_multi(product_ids, days=days)
-    return {"product_name": product_name, "markets": matched, "history": history}
-
+# ── 크롤링 ────────────────────────────────────────────────────────────────────
 
 @router.post("/crawl")
 async def trigger_crawl(
     background_tasks: BackgroundTasks,
     category: str = Query(default="vegetable"),
     market_keys: Optional[str] = Query(default=None, description="쉼표 구분, 예: kurly,coupang"),
+    item_names: Optional[str] = Query(default=None, description="쉼표 구분, 예: 양파,당근"),
 ):
-    """수동 크롤링 트리거 — 백그라운드 실행"""
     if _crawl_status["running"]:
         return {"ok": False, "message": "이미 크롤링이 진행 중입니다"}
 
-    keys = market_keys.split(",") if market_keys else None
-    background_tasks.add_task(_run_crawl_bg, category, keys)
+    mkeys = market_keys.split(",") if market_keys else None
+    inames = item_names.split(",") if item_names else None
+    background_tasks.add_task(_run_crawl_bg, category, mkeys, inames)
     return {"ok": True, "message": f"'{category}' 크롤링을 시작했습니다"}
 
 
@@ -99,10 +116,11 @@ def get_crawl_status():
     return _crawl_status
 
 
-async def _run_crawl_bg(category: str, market_keys: Optional[list[str]]) -> None:
+async def _run_crawl_bg(category: str, market_keys: Optional[list[str]],
+                        item_names: Optional[list[str]]) -> None:
     _crawl_status["running"] = True
     try:
-        result = await run_all(category_key=category, market_keys=market_keys)
+        result = await run_all(category_key=category, market_keys=market_keys, item_names=item_names)
         _crawl_status["last_result"] = result
         logger.info(f"크롤링 완료: {result}")
     except Exception as e:

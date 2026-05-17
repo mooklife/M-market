@@ -12,43 +12,48 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = "vegetable"):
     categories = repo.get_categories()
-    products_raw = repo.get_products_by_category(category)
-
-    grouped: dict[str, list] = {}
-    for p in products_raw:
-        grouped.setdefault(p["name"], []).append(p)
-
+    items_with_prices = repo.get_items_with_latest_prices(category)
     return templates.TemplateResponse(request, "index.html", {
         "categories": categories,
         "current_category": category,
-        "grouped_products": sorted(grouped.items()),
+        "items_with_prices": items_with_prices,
     })
 
 
-@router.get("/product/{product_name}", response_class=HTMLResponse)
-def product_detail(request: Request, product_name: str, category: str = "vegetable", days: int = 90):
+@router.get("/item/{item_id}", response_class=HTMLResponse)
+def item_detail(request: Request, item_id: int, category: str = "vegetable", days: int = 90):
     categories = repo.get_categories()
-    all_products = repo.get_products_by_category(category)
-    matched = [p for p in all_products if p["name"] == product_name]
 
-    product_ids = list({p["id"] for p in matched})
+    # 품목 정보
+    items = repo.get_search_items(category, active_only=False)
+    item = next((i for i in items if i["id"] == item_id), None)
+
+    # 마켓별 최신가
+    all_items = repo.get_items_with_latest_prices(category)
+    item_data = next((i for i in all_items if i["item_id"] == item_id), None)
+
+    # 가격 이력
+    product_ids = repo.get_product_ids_by_search_item(item_id)
     history = repo.get_price_history_multi(product_ids, days=days)
 
     return templates.TemplateResponse(request, "detail.html", {
         "categories": categories,
-        "product_name": product_name,
         "current_category": category,
-        "matched_products": matched,
+        "item": item,
+        "item_data": item_data,
         "history": history,
         "days": days,
     })
 
 
 @router.get("/admin", response_class=HTMLResponse)
-def admin(request: Request):
+def admin(request: Request, category: str = "vegetable"):
     markets = repo.get_markets(active_only=False)
     categories = repo.get_categories()
+    search_items = repo.get_search_items(category, active_only=False)
     return templates.TemplateResponse(request, "admin.html", {
         "markets": markets,
         "categories": categories,
+        "current_category": category,
+        "search_items": search_items,
     })

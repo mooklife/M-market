@@ -119,25 +119,45 @@ class OasisCrawler(BaseCrawler):
             "sale_price": sale_price,
         }
 
-    async def _parse_from_text(self, page: Page) -> list[dict]:
-        """JS 렌더링 실패 시 페이지 텍스트에서 직접 파싱"""
+    async def _parse_from_text(self, page: Page, keyword: str = "") -> list[dict]:
+        """JS 렌더링 실패 시 페이지 텍스트에서 직접 파싱.
+
+        keyword가 주어지면 해당 단어가 포함된 줄 근처를 우선 파싱.
+        """
         text = await page.inner_text("body")
         products = []
-        # 패턴: "상품명\n...XX% N,NNN원 N,NNN원"
-        pattern = re.compile(
-            r"([가-힣a-zA-Z0-9\[\]()/ .~*&,%-]+)\s*\n"  # 상품명
-            r".*?(\d+)%\s*\*?\*?(\d[\d,]+)\*?\*?원\s*\*?\*?(\d[\d,]+)\*?\*?원",
-            re.DOTALL,
-        )
-        for m in pattern.finditer(text):
-            name_raw, rate_str, sale_str, orig_str = m.groups()
-            name_raw = name_raw.strip()
-            if len(name_raw) < 2 or len(name_raw) > 80:
+
+        # 패턴: "상품명 줄\n ...할인% 판매가원 정가원" (줄 단위)
+        lines = text.splitlines()
+        i = 0
+        while i < len(lines) and len(products) < 60:
+            line = lines[i].strip()
+
+            # 상품명 후보 필터
+            if not (6 <= len(line) <= 80):
+                i += 1
                 continue
-            sale_price = int(sale_str.replace(",", ""))
-            original_price = int(orig_str.replace(",", ""))
-            discount_rate = int(rate_str) / 100 if rate_str != "0" else 0.0
-            name, unit = _split_name_unit(name_raw)
+            if not re.search(r"[가-힣]{2,}", line):   # 한글 2글자 이상 필수
+                i += 1
+                continue
+            if _is_ui_label(line):                     # UI 라벨/가격 텍스트 제외
+                i += 1
+                continue
+
+            # 뒤 10줄 안에서 가격 정보 탐색
+            window = "\n".join(lines[i: i + 10])
+            prices = _extract_all_prices(window)
+            if not prices:
+                i += 1
+                continue
+
+            # 할인율
+            rate_m = re.search(r"(\d{1,2})%", window)
+            discount_rate = int(rate_m.group(1)) / 100 if rate_m else 0.0
+            sale_price = min(prices)
+            original_price = max(prices) if len(prices) > 1 else None
+
+            name, unit = _split_name_unit(line)
             products.append({
                 "name": name,
                 "unit": unit,
@@ -146,11 +166,28 @@ class OasisCrawler(BaseCrawler):
                 "discount_rate": discount_rate,
                 "sale_price": sale_price,
             })
-            if len(products) >= 60:
-                break
+            i += 5  # 같은 상품 중복 방지용 스킵
 
         self.logger.info(f"[oasis] 텍스트 파싱으로 {len(products)}건 추출")
         return products
+
+
+def _is_ui_label(text: str) -> bool:
+    """페이지 UI 라벨이나 가격 텍스트인지 판별 — 상품명으로 저장 불가"""
+    # 가격 패턴: "1,234원" 또는 "1234원"
+    if re.search(r"\d[\d,]+원$", text):
+        return True
+    # 단위당 가격: "100g당", "10g당"
+    if re.search(r"\d+[gGkK][가-힣]당", text):
+        return True
+    # 알려진 UI 라벨
+    _UI_LABELS = {
+        "오아시스배송", "직영택배", "최대혜택가", "타임특가", "오늘드림",
+        "새벽배송", "당일배송", "익일배송", "무료배송", "묶음배송",
+        "품절", "일시품절", "재입고알림", "구매하기", "장바구니",
+        "찜하기", "리뷰", "후기", "포인트", "쿠폰다운로드",
+    }
+    return text in _UI_LABELS
 
 
 def _parse_price(text: str) -> Optional[int]:
